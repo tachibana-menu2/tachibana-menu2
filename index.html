@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>和のバル橘 - デジタル日本酒メニュー</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Serif JP', serif; background-color: #f8f5f0; color: #2d2d2d; }
+        .tab-active { border-bottom: 2px solid #b4945c; color: #b4945c; }
+        .sake-card { border-left: 4px solid #1a2a44; transition: all 0.3s ease; }
+        .category-header { background-color: #1a2a44; color: #ffffff; }
+    </style>
+</head>
+<body class="min-h-screen pb-10">
+    <header class="category-header py-6 px-4 shadow-lg text-center">
+        <h1 class="text-2xl font-bold tracking-widest">和のバル 橘</h1>
+        <p class="text-xs mt-2 opacity-80">- 本日の日本酒 -</p>
+    </header>
+
+    <div class="sticky top-0 bg-[#f8f5f0] shadow-sm z-10 flex justify-around py-3 px-2 mb-6 border-b border-gray-200 overflow-x-auto whitespace-nowrap">
+        <button onclick="showCategory('recommended')" id="tab-recommended" class="text-sm font-bold px-2 py-1 tab-active flex-shrink-0">おすすめ</button>
+        <button onclick="showCategory('selected')" id="tab-selected" class="text-sm font-bold px-2 py-1 text-gray-500 flex-shrink-0">厳選</button>
+        <button onclick="showCategory('premium')" id="tab-premium" class="text-sm font-bold px-2 py-1 text-gray-500 flex-shrink-0">プレミアム</button>
+        <button onclick="showCategory('sparkling')" id="tab-sparkling" class="text-sm font-bold px-2 py-1 text-gray-500 flex-shrink-0">スパークリング</button>
+    </div>
+
+    <main id="sake-list" class="px-4 space-y-4">
+        <p class="text-center py-10 text-gray-400">最新データを読み込み中...</p>
+    </main>
+
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-lg w-full max-w-sm p-6 relative overflow-y-auto max-h-[90vh]">
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-20">✕</button>
+            <div id="modal-content" class="mt-2"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://script.google.com/macros/s/AKfycbyD3T9bQsITD9vYWTX54lhj4wodrt5HuWkOftKijK-aMnOhux_PYOyb3vbU5ccF-Dfj/exec';
+        let sakeData = [];
+        let currentCategory = 'recommended';
+
+        async function fetchSakeData() {
+            try {
+                const response = await fetch(API_URL);
+                sakeData = await response.json();
+                showCategory(currentCategory);
+            } catch (error) {
+                console.error('Fetch error:', error);
+                document.getElementById('sake-list').innerHTML = '<p class="text-center py-10 text-red-500">データの読み込みに失敗しました。</p>';
+            }
+        }
+
+        function renderTasteTag(s) {
+            const type = s.taste || '';
+            if (type.includes('辛')) return '<span class="bg-blue-600 text-white px-2 py-1 text-[10px] font-bold leading-none rounded-sm">辛口</span>';
+            if (type.includes('甘')) return '<span class="bg-pink-400 text-white px-3 py-1 text-[10px] font-bold leading-none rounded-full">甘口</span>';
+            return '';
+        }
+
+        function renderPrice(s) {
+            if (s.category.includes('スパークリング')) return s.priceBottle ? `瓶: ${s.priceBottle}` : '';
+            const prices = [];
+            if (s.priceHalf) prices.push(`半合: ${s.priceHalf}`);
+            if (s.priceFull) prices.push(`1合: ${s.priceFull}`);
+            return prices.length > 0 ? prices.join(' / ') : '-';
+        }
+
+        function showCategory(category) {
+            currentCategory = category;
+            ['recommended', 'selected', 'premium', 'sparkling'].forEach(cat => {
+                const tab = document.getElementById('tab-' + cat);
+                if (tab) tab.className = `text-sm font-bold px-2 py-1 ${cat === category ? 'tab-active' : 'text-gray-500'} flex-shrink-0`;
+            });
+
+            const catMap = { 'recommended': ['おすすめ'], 'selected': ['厳選'], 'premium': ['プレミアム'], 'sparkling': ['スパークリング'] };
+            const filtered = sakeData.filter(s => (s.status.toUpperCase() === 'ON') && catMap[category].includes(s.category));
+            
+            const container = document.getElementById('sake-list');
+            if (filtered.length === 0) {
+                container.innerHTML = '<p class="text-center py-10 text-gray-400">現在、このカテゴリーのお酒はございません。</p>';
+                return;
+            }
+
+            container.innerHTML = filtered.map(s => `
+                <div class="sake-card bg-white p-4 shadow-sm rounded-r-md" onclick="openModal('${s.name.replace(/'/g, "\\'")}')">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-sm text-[#b4945c] font-bold border border-[#b4945c] px-1.5 rounded">${s.prefecture}</span>
+                                ${renderTasteTag(s)}
+                            </div>
+                            <h2 class="text-xl font-bold text-gray-900">${s.name}</h2>
+                            <p class="text-sm text-gray-800 mt-1.5 font-medium">${s.type || ''}</p>
+                        </div>
+                        <div class="text-right flex-shrink-0 ml-2">
+                            <p class="font-bold text-[#1a2a44] text-base">${renderPrice(s)}</p>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openModal(name) {
+            const s = sakeData.find(item => item.name === name);
+            if (!s) return;
+            const content = document.getElementById('modal-content');
+            content.innerHTML = `
+                <div class="pr-8">
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                        <span class="text-base text-[#b4945c] font-bold">${s.prefecture}</span>
+                        ${renderTasteTag(s)}
+                    </div>
+                    <h2 class="text-2xl font-bold mt-1 text-gray-900 leading-tight">${s.name}</h2>
+                    <p class="text-lg font-bold text-[#b4945c] mb-2">${s.type || ''}</p>
+                </div>
+                <div class="bg-gray-100 p-4 rounded-lg my-4 text-sm grid grid-cols-2 gap-y-2">
+                    <div class="text-gray-500">原料米</div><div class="font-bold text-gray-900">${s.rice || '-'}</div>
+                    <div class="text-gray-500">精米歩合</div><div class="font-bold text-gray-900">${s.polish || '-'}</div>
+                    <div class="text-gray-500">アルコール度</div><div class="font-bold text-gray-900">${s.alcohol || '-'}</div>
+                    <div class="text-gray-500">日本酒度</div><div class="font-bold text-gray-900">${s.smv || '-'}</div>
+                </div>
+                <div class="bg-gray-50 p-4 rounded text-base space-y-2 mb-4 text-gray-800 font-medium">
+                    <p class="leading-relaxed"><strong class="text-gray-900 font-bold block mb-1">店主より</strong>${s.comment || '準備中...'}</p>
+                </div>
+                <div class="text-2xl font-bold text-[#1a2a44] text-center border-t pt-4">${renderPrice(s)}</div>
+            `;
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+
+        fetchSakeData();
+    </script>
+</body>
+</html>
